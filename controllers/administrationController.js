@@ -1,4 +1,21 @@
 import Administration from "../models/Administration.js";
+import cloudinary from "../config/cloudinary.js";
+import streamifier from "streamifier";
+
+const uploadToCloudinary = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "matoshri/administration",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
+};
 
 // ✅ Get all staff
 export const getAllStaff = async (req, res) => {
@@ -13,11 +30,17 @@ export const getAllStaff = async (req, res) => {
 // ✅ Add new staff
 export const addStaff = async (req, res) => {
   try {
+    let photoUrl = "";
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer);
+      photoUrl = result.secure_url;
+    } else if (req.body.photo) {
+      photoUrl = req.body.photo;
+    }
+
     const newStaff = new Administration({
       ...req.body,
-      photo: req.file
-        ? `/uploads/administration/${req.file.filename}`
-        : "",
+      photo: photoUrl,
     });
 
     await newStaff.save();
@@ -35,12 +58,13 @@ export const updateStaff = async (req, res) => {
     };
 
     if (req.file) {
-      data.photo = `/uploads/administration/${req.file.filename}`;
+      const result = await uploadToCloudinary(req.file.buffer);
+      data.photo = result.secure_url;
     }
 
     const updated = await Administration.findByIdAndUpdate(
       req.params.id,
-       data, // ✅ YAHI FIX HAI
+      data,
       { new: true }
     );
     res.json(updated);
@@ -58,4 +82,5 @@ export const deleteStaff = async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 };
+
 
